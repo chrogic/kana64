@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>カナ64進 変換ツール</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&family=Zen+Old+Mincho:wght@500;700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EDF1F5;
+    --sheet: #F8FAFC;
+    --ink: #17202B;
+    --muted: #5C6B7C;
+    --ai: #24467A;        /* 藍 */
+    --ai-soft: #D5E0EE;
+    --yamabuki: #E2A53A;  /* 山吹: 使われている桁の印 */
+    --yamabuki-soft: #F7E3BC;
+    --error: #B03A2E;
+    --line: #C9D3DE;
+    --mincho: "Zen Old Mincho", "Hiragino Mincho ProN", "Yu Mincho", "Noto Serif JP", serif;
+    --gothic: "Zen Kaku Gothic New", "Hiragino Sans", "Yu Gothic", "Noto Sans JP", system-ui, sans-serif;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    color-scheme: light;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #10161E; --sheet: #18212C; --ink: #E4EAF1; --muted: #93A2B3;
+      --ai: #93B4E2; --ai-soft: #22324A; --yamabuki: #F0B95A; --yamabuki-soft: #3D3120;
+      --error: #F08A7E; --line: #2C3A4A; color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #10161E; --sheet: #18212C; --ink: #E4EAF1; --muted: #93A2B3;
+    --ai: #93B4E2; --ai-soft: #22324A; --yamabuki: #F0B95A; --yamabuki-soft: #3D3120;
+    --error: #F08A7E; --line: #2C3A4A; color-scheme: dark;
+  }
+
+  :root {
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--gothic);
+    font-size: 1rem;
+    line-height: 1.7;
+  }
+  main {
+    max-width: 52rem;
+    margin: 0 auto;
+    padding: 2.5rem 1.25rem 4rem;
+  }
+
+  h1 {
+    font-family: var(--mincho);
+    font-weight: 700;
+    font-size: clamp(2.2rem, 7vw, 3.4rem);
+    line-height: 1.15;
+    margin: 0 0 .6rem;
+    letter-spacing: .04em;
+    color: var(--ai);
+  }
+  .head { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem 1.5rem; margin: 0 0 1.5rem; }
+  .head h1 { margin: 0; white-space: nowrap; }
+  .lead { flex: 1 1 18rem; margin: 0; color: var(--muted); font-size: .85rem; line-height: 1.6; }
+
+  /* ---- 変換欄 ---- */
+  .converter {
+    background: var(--sheet);
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    padding: 1.5rem 1.25rem;
+  }
+  .field + .field { margin-top: .7rem; }
+  .field label {
+    display: block;
+    font-size: .875rem;
+    font-weight: 700;
+    color: var(--muted);
+    margin-bottom: .3rem;
+  }
+  .row { display: flex; align-items: flex-end; gap: .75rem; }
+  .copy { flex: none; font-size: .8rem; padding: .25rem .7rem; margin-bottom: .3rem; }
+  .field textarea {
+    flex: 1;
+    resize: none;
+    overflow: hidden;
+    overflow-wrap: anywhere;
+    line-height: 1.35;
+    min-width: 0;
+    border: none;
+    border-bottom: 2px solid var(--line);
+    background: transparent;
+    color: var(--ink);
+    padding: .25rem 0 .35rem;
+    outline: none;
+    border-radius: 0;
+  }
+  .field textarea:focus { border-bottom-color: var(--ai); }
+  .field textarea:focus-visible { outline: 2px solid var(--ai); outline-offset: 4px; }
+  #dec { font-family: var(--mono); font-size: 1.25rem; }
+  #ascii, #hex { font-family: var(--mono); font-size: 1.25rem; }
+  #bin { font-family: var(--mono); font-size: 1rem; letter-spacing: .02em; }
+  #kana {
+    font-family: var(--mincho);
+    font-size: clamp(2rem, 6vw, 2.8rem);
+    letter-spacing: .08em;
+    color: var(--ai);
+    font-weight: 500;
+  }
+  .note { min-height: 1.2em; margin: .15rem 0 0; font-size: .8rem; line-height: 1.4; color: var(--muted); }
+  .note.error { color: var(--error); }
+
+  .actions { display: flex; flex-wrap: wrap; gap: .6rem; margin-top: 1.5rem; }
+  button {
+    font: inherit;
+    font-size: .9rem;
+    padding: .45rem 1rem;
+    border-radius: 4px;
+    border: 1px solid var(--ai);
+    background: transparent;
+    color: var(--ai);
+    cursor: pointer;
+  }
+  button:hover { background: var(--ai-soft); }
+  button:focus-visible { outline: 2px solid var(--ai); outline-offset: 2px; }
+
+  /* ---- 版の切り替え ---- */
+  .ver { display: flex; flex-wrap: wrap; gap: .6rem; margin: 0 0 .8rem; }
+  .ver button[aria-pressed="true"] { background: var(--ai); color: var(--sheet); }
+  .ver-desc { margin: 0 0 2rem; color: var(--muted); max-width: 38rem; font-size: .8rem; line-height: 1.6; min-height: 3.2em; }
+
+  /* ---- 64文字の表 ---- */
+  h2 {
+    font-family: var(--mincho);
+    font-size: 1.5rem;
+    margin: 3rem 0 .4rem;
+  }
+  .grid-help { margin: 0 0 1rem; color: var(--muted); font-size: .9rem; }
+  .grid-wrap { overflow-x: auto; }
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+    gap: 1px;
+    background: var(--line);
+    border: 1px solid var(--line);
+    min-width: 22rem;
+  }
+  .cell {
+    border: none;
+    border-radius: 0;
+    background: var(--sheet);
+    color: var(--ink);
+    padding: .4rem .2rem .35rem;
+    display: grid;
+    grid-template-rows: auto auto;
+    justify-items: center;
+    line-height: 1.2;
+  }
+  .cell .k { font-family: var(--mincho); font-size: 1.6rem; font-weight: 500; }
+  .cell .meta { font-family: var(--mono); font-size: .7rem; color: var(--muted); }
+  .cell.used { background: var(--yamabuki-soft); box-shadow: inset 0 -3px 0 var(--yamabuki); }
+  .cell.dakuten .k { color: var(--ai); }
+
+</style>
+</head>
+<body>
+<main>
+  <header class="head">
+  <h1>カナ64進</h1>
+  <p class="lead">カタカナで64進数を表します。どの欄に入力しても、ほかの欄がすぐに変わります。カナ欄はひらがな・半角カナ・「・」区切りでも、16進数と2進数は空白区切りや 0x・0b 付きでも読み取れます。</p>
+  </header>
+  <div class="ver" role="group" aria-label="版の選択">
+    <button type="button" id="ver-kana64" aria-pressed="true">kana64（カタカナだけ）</button>
+    <button type="button" id="ver-kana64n" aria-pressed="false">kana64n（数字入り）</button>
+  </div>
+  <p class="ver-desc" id="ver-desc"></p>
+
+  <section class="converter" aria-label="変換">
+    <div class="field">
+      <label for="dec">10進数</label>
+      <div class="row">
+        <textarea id="dec" inputmode="numeric" autocomplete="off" spellcheck="false" rows="1">12345</textarea>
+        <button type="button" class="copy" data-target="dec">コピー</button>
+      </div>
+      <p class="note" id="dec-note"></p>
+    </div>
+    <div class="field">
+      <label for="kana">カナ64進</label>
+      <div class="row">
+        <textarea id="kana" autocomplete="off" spellcheck="false" lang="ja" rows="1"></textarea>
+        <button type="button" class="copy" data-target="kana">コピー</button>
+      </div>
+      <p class="note" id="kana-note"></p>
+    </div>
+    <div class="field">
+      <label for="ascii">内部ASCII表記</label>
+      <div class="row">
+        <textarea id="ascii" autocomplete="off" spellcheck="false" rows="1"></textarea>
+        <button type="button" class="copy" data-target="ascii">コピー</button>
+      </div>
+      <p class="note" id="ascii-note"></p>
+    </div>
+    <div class="field">
+      <label for="hex">16進数</label>
+      <div class="row">
+        <textarea id="hex" autocomplete="off" spellcheck="false" rows="1"></textarea>
+        <button type="button" class="copy" data-target="hex">コピー</button>
+      </div>
+      <p class="note" id="hex-note"></p>
+    </div>
+    <div class="field">
+      <label for="bin">2進数</label>
+      <div class="row">
+        <textarea id="bin" inputmode="numeric" autocomplete="off" spellcheck="false" rows="1"></textarea>
+        <button type="button" class="copy" data-target="bin">コピー</button>
+      </div>
+      <p class="note" id="bin-note"></p>
+    </div>
+    <div class="actions">
+      <button type="button" id="random">ランダムな数にする</button>
+      <button type="button" id="clear">消去</button>
+    </div>
+  </section>
+
+  <h2>64文字の対応表</h2>
+  <p class="grid-help">上段がカナ、下段が値とASCII表記です。いまの値で使われている文字に印が付きます。</p>
+  <div class="grid-wrap"><div class="grid" id="grid"></div></div>
+
+</main>
+
+<script>
+(() => {
+  const VERSIONS = {
+    kana64: {
+      charset:
+        "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン" +
+        "ガギグゲゴザジズゼゾダデドバビブベボ",
+      dakuten: "ガギグゲゴザジズゼゾダデドバビブベボ",
+      confusables: { "ヂ": "ジ", "ヅ": "ズ" },
+      explain: true,
+      desc: "カタカナ64文字だけで表します。清音46文字と濁音18文字を使い、半濁音（パ行）とヂ・ヅは使いません。ヂ・ヅはジ・ズとして読み取ります。",
+    },
+    kana64n: {
+      charset:
+        "0123456789" +
+        "アイウエオカキクケコサシスセソタチツテトナニヌネノハヒフヘホマミムメモヤユヨラリルレロワヲン" +
+        "ガギグゲゴザジズ",
+      dakuten: "ガギグゲゴザジズ",
+      confusables: { "〇": "0" },
+      explain: false,
+      desc: "数字10文字とカタカナ54文字（清音46文字と濁音8文字）で表します。0〜9の値は数字のままです。",
+    },
+  };
+  const COMMON_CONFUSABLES = { "口": "ロ", "二": "ニ", "工": "エ", "力": "カ", "卜": "ト", "八": "ハ" };
+  const ASCII = [..."0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz~"];
+  const asciiIndex = new Map(ASCII.map((c, i) => [c, i]));
+  const PA = new Set([..."パピプペポ"]);
+  const SMALL = new Set([..."ァィゥェォッャュョヮヵヶ"]);
+
+  // 現在の版（setVersion で切り替わる）
+  let ver, KANA, DAKUTEN, kanaIndex, CONFUSABLES;
+
+  function normalize(input) {
+    let s = input.normalize("NFKC");
+    s = s.replace(/[\u3041-\u3096]/g, c => String.fromCharCode(c.charCodeAt(0) + 0x60));
+    s = [...s].map(c => CONFUSABLES[c] ?? c).join("");
+    return s.replace(/[\s_\-・]/g, "");
+  }
+  function encode(alpha, n, minLen = 1) {
+    const out = [];
+    do { out.push(alpha[Number(n & 63n)]); n >>= 6n; } while (n > 0n);
+    while (out.length < minLen) out.push(alpha[0]);
+    return out.reverse().join("");
+  }
+  function decode(index, s) {
+    if (!s) return null;
+    let n = 0n;
+    for (const c of s) {
+      const v = index.get(c);
+      if (v === undefined) {
+        if (ver.explain && PA.has(c)) throw new Error(`「${c}」は使えません。半濁音（パ行）は対象外です`);
+        if (ver.explain && SMALL.has(c)) throw new Error(`「${c}」は使えません。小さいカナは対象外です`);
+        throw new Error(`「${c}」は使えない文字です`);
+      }
+      n = (n << 6n) | BigInt(v);
+    }
+    return n;
+  }
+
+  const $ = id => document.getElementById(id);
+  const dec = $("dec"), kana = $("kana"), ascii = $("ascii"), hex = $("hex"), bin = $("bin");
+  const fields = { dec, kana, ascii, hex, bin };
+  const notes = {
+    dec: $("dec-note"), kana: $("kana-note"), ascii: $("ascii-note"),
+    hex: $("hex-note"), bin: $("bin-note"),
+  };
+
+  // 2進数はカナ1桁＝6ビットごとに区切って表示する
+  function toBinGrouped(n) {
+    let s = n.toString(2);
+    s = s.padStart(Math.ceil(s.length / 6) * 6, "0");
+    return s.match(/.{6}/g).join(" ");
+  }
+  // 16進数は4桁ごとに区切る
+  function toHexGrouped(n) {
+    const s = n.toString(16).toUpperCase();
+    return s.padStart(Math.ceil(s.length / 4) * 4, "0").match(/.{4}/g).join(" ").replace(/^0+(?=.)/, "");
+  }
+
+  function setNote(key, text, isError = false) {
+    notes[key].textContent = text;
+    notes[key].classList.toggle("error", isError);
+  }
+  function clearNotes() {
+    for (const k in notes) setNote(k, "");
+    setNote("kana", "ひらがなでも入力できます");
+  }
+
+  // グリッド（版を切り替えるたびに作り直す）
+  const grid = $("grid");
+  let cells = [];
+  function buildGrid() {
+    grid.replaceChildren();
+    cells = KANA.map((k, i) => {
+      const b = document.createElement("div");
+      b.className = "cell" + (DAKUTEN.has(k) ? " dakuten" : "");
+      b.innerHTML = `<span class="k">${k}</span><span class="meta">${i}・${ASCII[i]}</span>`;
+      grid.appendChild(b);
+      return b;
+    });
+  }
+  function markUsed(kanaStr) {
+    const used = new Set([...kanaStr]);
+    cells.forEach((c, i) => c.classList.toggle("used", used.has(KANA[i])));
+  }
+
+  // 長い値は折り返す。高さは内容に合わせて調整する
+  function fit(el) { el.style.height = "auto"; el.style.height = el.scrollHeight + (el.offsetHeight - el.clientHeight) + "px"; }
+  function fitAll() { for (const key in fields) fit(fields[key]); }
+  function update(source) { updateCore(source); fitAll(); }
+  window.addEventListener("resize", fitAll);
+  if (document.fonts) document.fonts.ready.then(fitAll);
+  for (const key in fields) {
+    // 改行は入力させない
+    fields[key].addEventListener("keydown", e => { if (e.key === "Enter" && !e.isComposing) e.preventDefault(); });
+  }
+
+  // 長すぎる入力は計算が重くなるので、4096ビット相当までに制限する
+  const MAX_LEN = { dec: 1233, kana: 683, ascii: 683, hex: 1024, bin: 4096 };
+  function checkLen(key, s) {
+    if (s.length > MAX_LEN[key]) throw new Error(`長すぎます。${MAX_LEN[key]}文字まで（4096ビット相当）です`);
+    return s;
+  }
+
+  function updateCore(source) {
+    clearNotes();
+    let n = null;
+    try {
+      if (source === "dec") {
+        const s = dec.value.normalize("NFKC").replace(/[,\s_]/g, "");
+        checkLen("dec", s);
+        if (s === "") n = null;
+        else if (!/^\d+$/.test(s)) throw new Error("0以上の整数を入力してください");
+        else n = BigInt(s);
+      } else if (source === "kana") {
+        const raw = kana.value;
+        const norm = checkLen("kana", normalize(raw));
+        n = decode(kanaIndex, norm);
+        if (norm && norm !== raw) setNote("kana", `「${norm}」として読み取りました`);
+      } else if (source === "hex") {
+        const s = hex.value.normalize("NFKC").replace(/[\s_]/g, "").replace(/^0x/i, "");
+        checkLen("hex", s);
+        if (s === "") n = null;
+        else if (!/^[0-9a-f]+$/i.test(s)) throw new Error("0-9 と A-F だけで入力してください");
+        else n = BigInt("0x" + s);
+      } else if (source === "bin") {
+        const s = bin.value.normalize("NFKC").replace(/[\s_]/g, "").replace(/^0b/i, "");
+        checkLen("bin", s);
+        if (s === "") n = null;
+        else if (!/^[01]+$/.test(s)) throw new Error("0 と 1 だけで入力してください");
+        else n = BigInt("0b" + s);
+      } else {
+        n = decode(asciiIndex, checkLen("ascii", ascii.value.trim()));
+      }
+    } catch (e) {
+      setNote(source, e.message, true);
+      return;
+    }
+
+    if (n === null) {
+      for (const key in fields) if (key !== source) fields[key].value = "";
+      markUsed("");
+      return;
+    }
+    const k = encode(KANA, n), a = encode(ASCII, n);
+    const values = {
+      dec: n.toString(), kana: k, ascii: a,
+      hex: toHexGrouped(n), bin: toBinGrouped(n),
+    };
+    for (const key in fields) if (key !== source) fields[key].value = values[key];
+    if (source !== "bin") setNote("bin", `6ビットごとに区切っています。1区切りがカナ1桁に対応します`);
+    markUsed(k);
+  }
+
+  dec.addEventListener("input", () => update("dec"));
+  kana.addEventListener("input", e => { if (!e.isComposing) update("kana"); });
+  kana.addEventListener("compositionend", () => update("kana"));
+  ascii.addEventListener("input", () => update("ascii"));
+  hex.addEventListener("input", () => update("hex"));
+  bin.addEventListener("input", () => update("bin"));
+
+  function randomBig(maxBits = 48) {
+    const bits = 6 + Math.floor(Math.random() * (maxBits - 6));
+    let n = 0n;
+    for (let i = 0; i < bits; i++) n = (n << 1n) | BigInt(Math.random() < .5 ? 1 : 0);
+    return n;
+  }
+  $("random").addEventListener("click", () => { dec.value = randomBig().toString(); update("dec"); });
+  $("clear").addEventListener("click", () => { dec.value = ""; update("dec"); dec.focus(); });
+  document.querySelectorAll(".copy").forEach(btn => {
+    btn.addEventListener("click", async () => {
+      const input = $(btn.dataset.target);
+      try {
+        await navigator.clipboard.writeText(input.value);
+        btn.textContent = "コピーしました";
+      } catch {
+        input.select();
+        btn.textContent = "選択しました";
+      }
+      setTimeout(() => { btn.textContent = "コピー"; }, 1500);
+    });
+  });
+
+  function setVersion(id) {
+    ver = VERSIONS[id];
+    KANA = [...ver.charset].sort((a, b) => a.codePointAt(0) - b.codePointAt(0));
+    DAKUTEN = new Set([...ver.dakuten]);
+    kanaIndex = new Map(KANA.map((c, i) => [c, i]));
+    CONFUSABLES = { ...COMMON_CONFUSABLES, ...ver.confusables };
+    for (const key of Object.keys(VERSIONS)) {
+      $("ver-" + key).setAttribute("aria-pressed", String(key === id));
+    }
+    $("ver-desc").textContent = ver.desc;
+    buildGrid();
+    update("dec"); // 10進数の値を保ったまま、カナ表記だけ切り替える
+    try { history.replaceState(null, "", "#" + id); } catch {}
+  }
+  for (const key of Object.keys(VERSIONS)) {
+    $("ver-" + key).addEventListener("click", () => setVersion(key));
+  }
+  setVersion(location.hash === "#kana64n" ? "kana64n" : "kana64");
+})();
+</script>
+</body>
+</html>
